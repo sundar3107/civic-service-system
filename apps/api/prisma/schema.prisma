@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CITIZEN
+  AUTHORITY
+  ADMIN
+}
+
+enum ComplaintStatus {
+  REMEDIAL_NOT_STARTED
+  ACCEPTED
+  ONGOING
+  COMPLETED
+}
+
+enum GeoSource {
+  MAP
+  EXIF
+  NONE
+}
+
+model User {
+  id                   String                   @id @default(cuid())
+  email                String                   @unique
+  username             String?                  @unique
+  passwordHash         String?
+  role                 Role                     @default(CITIZEN)
+  emailVerifiedAt      DateTime?
+  profileCompletedAt   DateTime?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  profile              UserProfile?
+  complaints           Complaint[]              @relation("CitizenComplaints")
+  votes                Vote[]
+  reviews              Review[]
+  sessions             Session[]
+  emailTokens          EmailVerificationToken[]
+  authority            Authority?
+  auditLogs            AuditLog[]
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  fullName    String
+  age         Int
+  phoneNumber String
+  addressLine String
+  pincode     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Authority {
+  id          String                @id @default(cuid())
+  userId      String                @unique
+  displayName String
+  assignments AuthorityAssignment[]
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuthorityAssignment {
+  id          String    @id @default(cuid())
+  authorityId String
+  districtId  String
+  cityId      String
+  createdAt   DateTime  @default(now())
+  authority   Authority @relation(fields: [authorityId], references: [id], onDelete: Cascade)
+  district    District  @relation(fields: [districtId], references: [id])
+  city        City      @relation(fields: [cityId], references: [id])
+
+  @@unique([authorityId, cityId])
+}
+
+model District {
+  id       String   @id @default(cuid())
+  name     String   @unique
+  cities   City[]
+  assigns  AuthorityAssignment[]
+}
+
+model City {
+  id           String                @id @default(cuid())
+  districtId   String
+  name         String
+  complaints   Complaint[]
+  assignments  AuthorityAssignment[]
+  district     District              @relation(fields: [districtId], references: [id])
+
+  @@unique([districtId, name])
+}
+
+model IssueCategory {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  title       String
+  bannerTitle String
+  description String
+  fieldsJson  Json
+  complaints  Complaint[]
+}
+
+model Complaint {
+  id                  String                 @id @default(cuid())
+  complaintNumber     String                 @unique
+  citizenId           String
+  cityId              String?
+  issueCategoryId     String
+  description         String
+  creditName          String
+  detailsJson         Json?
+  status              ComplaintStatus        @default(REMEDIAL_NOT_STARTED)
+  voteCount           Int                    @default(0)
+  geoSource           GeoSource              @default(NONE)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  citizen             User                   @relation("CitizenComplaints", fields: [citizenId], references: [id])
+  city                City?                  @relation(fields: [cityId], references: [id])
+  issueCategory       IssueCategory          @relation(fields: [issueCategoryId], references: [id])
+  location            ComplaintLocation?
+  media               ComplaintMedia[]
+  statusHistory       ComplaintStatusHistory[]
+  votes               Vote[]
+  reviews             Review[]
+}
+
+model ComplaintLocation {
+  id               String     @id @default(cuid())
+  complaintId      String     @unique
+  latitude         Float?
+  longitude        Float?
+  formattedAddress String?
+  source           GeoSource  @default(NONE)
+  complaint        Complaint  @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+}
+
+model ComplaintMedia {
+  id          String     @id @default(cuid())
+  complaintId String
+  fileName    String
+  mimeType    String
+  filePath    String
+  createdAt   DateTime   @default(now())
+  complaint   Complaint  @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+}
+
+model ComplaintStatusHistory {
+  id          String          @id @default(cuid())
+  complaintId String
+  status      ComplaintStatus
+  note        String?
+  createdAt   DateTime        @default(now())
+  complaint   Complaint       @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+}
+
+model Vote {
+  id          String     @id @default(cuid())
+  complaintId String
+  userId      String
+  createdAt   DateTime   @default(now())
+  complaint   Complaint  @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([complaintId, userId])
+}
+
+model Review {
+  id          String     @id @default(cuid())
+  complaintId String
+  userId      String
+  rating      Int
+  body        String
+  createdAt   DateTime   @default(now())
+  complaint   Complaint  @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([complaintId, userId])
+}
+
+model EmailVerificationToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}

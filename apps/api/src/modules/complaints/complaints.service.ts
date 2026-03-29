@@ -1,0 +1,260 @@
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { ComplaintStatus, GeoSource } from "@civic/types";
+import { Prisma, Role } from "@prisma/client";
+import { PrismaService } from "../../common/prisma/prisma.service";
+import { buildComplaintNumber, severityFromVotes } from "../../common/utils/complaint.util";
+import { AuditService } from "../audit/audit.service";
+import { CreateComplaintDto } from "./dto/create-complaint.dto";
+import { DuplicateDetectionService } from "./duplicate-detection.service";
+import { MediaService } from "./media.service";
+
+@Injectable()
+export class ComplaintsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly duplicateDetectionService: DuplicateDetectionService,
+    private readonly mediaService: MediaService,
+    private readonly auditService: AuditService
+  ) {}
+
+  async listCitizenFeed() {
+    const complaints = await this.prisma.complaint.findMany({
+      include: {
+        issueCategory: true,
+        citizen: true,
+        location: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+
+    return complaints.map((complaint) => ({
+      id: complaint.id,
+      complaintNumber: complaint.complaintNumber,
+      issueType: complaint.issueCategory.code,
+      status: complaint.status,
+      locationLabel: complaint.location?.formattedAddress ?? "Location not provided",
+      createdAt: complaint.createdAt,
+      creditedTo: complaint.creditName || complaint.citizen.username || complaint.citizen.email,
+      voteCount: complaint.voteCount,
+      severityLabel: severityFromVotes(complaint.voteCount)
+    }));
+  }
+
+  async getComplaint(complaintId: string) {
+    const complaint = await this.prisma.complaint.findUnique({
+      where: { id: complaintId },
+      include: {
+        issueCategory: true,
+        citizen: {
+          include: {
+            profile: true
+          }
+        },
+        location: true,
+        media: true,
+        statusHistory: {
+          orderBy: {
+            createdAt: "asc"
+          }
+        },
+        reviews: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
+
+    if (!complaint) {
+      throw new NotFoundException("Complaint not found.");
+    }
+
+    return {
+      ...complaint,
+      severityLabel: severityFromVotes(complaint.voteCount)
+    };
+  }
+
+  async createComplaint(userId: string, dto: CreateComplaintDto, file?: Express.Multer.File) {
+    const citizen = await this.prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!citizen || citizen.role !== Role.CITIZEN || !citizen.profileCompletedAt) {
+      throw new BadRequestException("Citizen profile must be completed before complaint submission.");
+    }
+
+    const issueCategory = await this.prisma.issueCategory.findUnique({
+      where: { code: dto.issueCategoryCode }
+    });
+
+    if (!issueCategory) {
+      throw new NotFoundException("Issue category not found.");
+    }
+
+    if (!file) {
+      throw new BadRequestException("Complaint photo is required.");
+    }
+
+    const media = await this.mediaService.saveComplaintPhoto(file);
+    const exifLocation: { latitude: number; longitude: number; formattedAddress: string | null } | null =
+      dto.location?.latitude ? null : await this.mediaService.extractExifLocation(file);
+    const latitude = dto.location?.latitude ?? exifLocation?.latitude ?? null;
+    const longitude = dto.location?.longitude ?? exifLocation?.longitude ?? null;
+    const formattedAddress = dto.location?.formattedAddress ?? exifLocation?.formattedAddress ?? null;
+    const geoSource = dto.location?.latitude
+      ? GeoSource.MAP
+      : exifLocation?.latitude
+        ? GeoSource.EXIF
+        : GeoSource.NONE;
+
+    const duplicate = await this.duplicateDetectionService.findDuplicate(
+      issueCategory.id,
+      latitude ?? undefined,
+      longitude ?? undefined
+    );
+
+    if (duplicate) {
+      return {
+        duplicateSuggestion: true,
+        complaint: {
+          id: duplicate.id,
+          complaintNumber: duplicate.complaintNumber
+        }
+      };
+    }
+
+    const total = await this.prisma.complaint.count();
+    const city = await this.prisma.city.findFirst({
+      orderBy: { name: "asc" }
+    });
+
+    const complaint = await this.prisma.complaint.create({
+      data: {
+        complaintNumber: buildComplaintNumber(total + 1),
+        citizenId: userId,
+        cityId: city?.id,
+        issueCategoryId: issueCategory.id,
+        description: dto.description,
+        creditName: dto.creditName,
+        detailsJson: dto.categoryFields as unknown as Prisma.InputJsonValue,
+        status: ComplaintStatus.REMEDIAL_NOT_STARTED,
+        geoSource,
+        location: {
+          create: {
+            latitude,
+            longitude,
+            formattedAddress,
+            source: geoSource
+          }
+        },
+        media: {
+          create: media
+        },
+        statusHistory: {
+          create: {
+            status: ComplaintStatus.REMEDIAL_NOT_STARTED,
+            note: "Complaint created"
+          }
+        }
+      },
+      include: {
+        location: true,
+        issueCategory: true
+      }
+    });
+
+    await this.auditService.log({
+      userId,
+      action: "COMPLAINT_CREATED",
+      entityType: "Complaint",
+      entityId: complaint.id,
+      payload: {
+        issueCategoryCode: dto.issueCategoryCode,
+        categoryFields: dto.categoryFields
+      } as unknown as Prisma.InputJsonValue
+    });
+
+    return complaint;
+  }
+
+  async listAuthorityComplaints(userId: string) {
+    const authority = await this.prisma.authority.findUnique({
+      where: { userId },
+      include: { assignments: true }
+    });
+
+    if (!authority) {
+      throw new NotFoundException("Authority account not found.");
+    }
+
+    const cityIds = authority.assignments.map((assignment) => assignment.cityId);
+
+    return this.prisma.complaint.findMany({
+      where: {
+        cityId: {
+          in: cityIds
+        }
+      },
+      include: {
+        issueCategory: true,
+        location: true,
+        citizen: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+  }
+
+  async updateStatus(userId: string, complaintId: string, status: ComplaintStatus, note?: string) {
+    const authority = await this.prisma.authority.findUnique({
+      where: { userId },
+      include: { assignments: true }
+    });
+
+    if (!authority) {
+      throw new NotFoundException("Authority account not found.");
+    }
+
+    const complaint = await this.prisma.complaint.findUnique({
+      where: { id: complaintId }
+    });
+
+    if (!complaint) {
+      throw new NotFoundException("Complaint not found.");
+    }
+
+    if (!authority.assignments.some((assignment) => assignment.cityId === complaint.cityId)) {
+      throw new BadRequestException("You are not assigned to this complaint location.");
+    }
+
+    const updated = await this.prisma.complaint.update({
+      where: { id: complaintId },
+      data: {
+        status,
+        statusHistory: {
+          create: {
+            status,
+            note
+          }
+        }
+      },
+      include: {
+        statusHistory: true
+      }
+    });
+
+    await this.auditService.log({
+      userId,
+      action: "COMPLAINT_STATUS_UPDATED",
+      entityType: "Complaint",
+      entityId: complaintId,
+      payload: { status, note }
+    });
+
+    return updated;
+  }
+}
