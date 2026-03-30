@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ComplaintStatus } from "@civic/types";
 import { Panel, SectionTitle } from "@civic/ui";
 import { apiPatch } from "../../lib/api";
@@ -17,6 +17,10 @@ export type AuthorityComplaint = {
 
 export function AuthorityDashboard({ complaints }: { complaints: AuthorityComplaint[] }) {
   const [items, setItems] = useState(complaints);
+
+  useEffect(() => {
+    setItems(complaints);
+  }, [complaints]);
 
   async function updateStatus(complaintId: string, status: ComplaintStatus) {
     await apiPatch(`/complaints/${complaintId}/status`, { status });

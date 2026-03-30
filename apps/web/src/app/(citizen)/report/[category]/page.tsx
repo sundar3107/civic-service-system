@@ -19,7 +19,7 @@ export default async function ReportPage({ params }: { params: { category: strin
       title={`Report ${category.title}`}
       subtitle="Submit photo evidence, describe the issue, and provide location details when available."
       links={[
-        { href: "/", label: "Citizen Home" },
+        { href: "/home", label: "Citizen Home" },
         { href: "/login", label: "Login" }
       ]}
     >
@@ -30,4 +30,3 @@ export default async function ReportPage({ params }: { params: { category: strin
     </AppShell>
   );
 }
-

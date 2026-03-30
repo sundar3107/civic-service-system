@@ -1,5 +1,22 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api";
 
+async function readError(response: Response) {
+  try {
+    const data = await response.json();
+    if (typeof data?.message === "string") {
+      return data.message;
+    }
+
+    if (Array.isArray(data?.message)) {
+      return data.message.join(", ");
+    }
+  } catch {
+    return `Request failed: ${response.status}`;
+  }
+
+  return `Request failed: ${response.status}`;
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     cache: "no-store",
@@ -7,7 +24,7 @@ export async function apiGet<T>(path: string): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(await readError(response));
   }
 
   return response.json();
@@ -26,7 +43,7 @@ export async function apiPost<T>(path: string, payload: BodyInit | Record<string
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(await readError(response));
   }
 
   return response.json();
@@ -43,9 +60,8 @@ export async function apiPatch<T>(path: string, payload: Record<string, unknown>
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(await readError(response));
   }
 
   return response.json();
 }
-

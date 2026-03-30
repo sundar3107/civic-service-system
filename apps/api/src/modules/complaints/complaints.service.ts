@@ -127,15 +127,17 @@ export class ComplaintsService {
     }
 
     const total = await this.prisma.complaint.count();
-    const city = await this.prisma.city.findFirst({
-      orderBy: { name: "asc" }
-    });
+    const routedCity = await this.resolveCityFromLocation(formattedAddress);
+
+    if (!routedCity) {
+      throw new BadRequestException("Unable to determine district and city from the selected location.");
+    }
 
     const complaint = await this.prisma.complaint.create({
       data: {
         complaintNumber: buildComplaintNumber(total + 1),
         citizenId: userId,
-        cityId: city?.id,
+        cityId: routedCity.id,
         issueCategoryId: issueCategory.id,
         description: dto.description,
         creditName: dto.creditName,
@@ -172,6 +174,8 @@ export class ComplaintsService {
       entityType: "Complaint",
       entityId: complaint.id,
       payload: {
+        districtId: routedCity.districtId,
+        cityId: routedCity.id,
         issueCategoryCode: dto.issueCategoryCode,
         categoryFields: dto.categoryFields
       } as unknown as Prisma.InputJsonValue
@@ -256,5 +260,69 @@ export class ComplaintsService {
     });
 
     return updated;
+  }
+
+  private async resolveCityFromLocation(formattedAddress: string | null) {
+    const cities = await this.prisma.city.findMany({
+      include: {
+        district: true
+      }
+    });
+
+    if (!formattedAddress) {
+      return this.findFallbackCity(cities);
+    }
+
+    const normalizedAddress = this.normalizeLocationText(formattedAddress);
+
+    const cityMatches = cities
+      .filter((city) => normalizedAddress.includes(this.normalizeLocationText(city.name)))
+      .sort((left, right) => {
+        const leftName = this.normalizeLocationText(left.name);
+        const rightName = this.normalizeLocationText(right.name);
+        const leftIndex = normalizedAddress.indexOf(leftName);
+        const rightIndex = normalizedAddress.indexOf(rightName);
+
+        if (leftIndex !== rightIndex) {
+          return leftIndex - rightIndex;
+        }
+
+        return right.name.length - left.name.length;
+      });
+
+    if (cityMatches.length > 0) {
+      return cityMatches[0];
+    }
+
+    const districtMatches = cities
+      .filter((city) => normalizedAddress.includes(this.normalizeLocationText(city.district.name)))
+      .sort((left, right) => right.district.name.length - left.district.name.length);
+
+    if (districtMatches.length > 0) {
+      return districtMatches[0];
+    }
+
+    return this.findFallbackCity(cities);
+  }
+
+  private normalizeLocationText(value: string) {
+    return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  private findFallbackCity(
+    cities: Array<{
+      id: string;
+      districtId: string;
+      name: string;
+      district: { name: string };
+    }>
+  ) {
+    return (
+      cities.find(
+        (city) =>
+          this.normalizeLocationText(city.district.name) === "vellore" &&
+          this.normalizeLocationText(city.name) === "katpadi"
+      ) ?? null
+    );
   }
 }

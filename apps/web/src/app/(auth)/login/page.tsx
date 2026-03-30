@@ -7,7 +7,7 @@ export default function LoginPage() {
     <AppShell
       title="Citizen login"
       subtitle="Verify your email, complete onboarding once, then track and manage your civic reports."
-      links={[{ href: "/", label: "Back to Home" }]}
+      links={[{ href: "/authority/login", label: "Authority Portal" }]}
     >
       <Panel>
         <SectionTitle
@@ -20,4 +20,3 @@ export default function LoginPage() {
     </AppShell>
   );
 }
-

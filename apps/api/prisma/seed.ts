@@ -4,25 +4,43 @@ import * as argon2 from "argon2";
 const prisma = new PrismaClient();
 
 async function main() {
-  const district = await prisma.district.upsert({
-    where: { name: "Pilot District" },
-    update: {},
-    create: { name: "Pilot District" }
-  });
+  const tamilNaduLocations = [
+    { district: "Chennai", cities: ["Chennai", "Alandur", "Ambattur", "Madhavaram"] },
+    { district: "Vellore", cities: ["Vellore", "Gudiyatham", "Katpadi", "Pernambut"] },
+    { district: "Tiruvannamalai", cities: ["Tiruvannamalai", "Arani", "Vandavasi", "Polur", "Chengam", "Cheyyar"] },
+    { district: "Coimbatore", cities: ["Coimbatore", "Pollachi", "Mettupalayam", "Sulur", "Valparai", "Madukkarai"] }
+  ];
 
-  const city = await prisma.city.upsert({
-    where: {
-      districtId_name: {
+  const createdCities = new Map<string, { districtId: string; cityId: string }>();
+
+  for (const entry of tamilNaduLocations) {
+    const district = await prisma.district.upsert({
+      where: { name: entry.district },
+      update: {},
+      create: { name: entry.district }
+    });
+
+    for (const cityName of entry.cities) {
+      const city = await prisma.city.upsert({
+        where: {
+          districtId_name: {
+            districtId: district.id,
+            name: cityName
+          }
+        },
+        update: {},
+        create: {
+          districtId: district.id,
+          name: cityName
+        }
+      });
+
+      createdCities.set(`${entry.district}:${cityName}`, {
         districtId: district.id,
-        name: "Pilot City"
-      }
-    },
-    update: {},
-    create: {
-      districtId: district.id,
-      name: "Pilot City"
+        cityId: city.id
+      });
     }
-  });
+  }
 
   const categories = [
     {
@@ -84,43 +102,81 @@ async function main() {
     });
   }
 
-  const authorityUser = await prisma.user.upsert({
-    where: { email: "authority@pilotcity.gov" },
-    update: {},
-    create: {
-      email: "authority@pilotcity.gov",
-      role: Role.AUTHORITY,
-      emailVerifiedAt: new Date(),
-      username: "pilot-authority",
-      passwordHash: await argon2.hash("Authority@123")
+  const authoritySeeds = [
+    {
+      email: "authority.chennai@tn.gov",
+      username: "authority-chennai",
+      displayName: "Chennai Municipal Office",
+      district: "Chennai",
+      city: "Chennai"
+    },
+    {
+      email: "authority.vellore@tn.gov",
+      username: "authority-vellore",
+      displayName: "Vellore Municipal Office",
+      district: "Vellore",
+      city: "Katpadi"
+    },
+    {
+      email: "authority.tiruvannamalai@tn.gov",
+      username: "authority-tiruvannamalai",
+      displayName: "Tiruvannamalai Municipal Office",
+      district: "Tiruvannamalai",
+      city: "Tiruvannamalai"
+    },
+    {
+      email: "authority.coimbatore@tn.gov",
+      username: "authority-coimbatore",
+      displayName: "Coimbatore Municipal Office",
+      district: "Coimbatore",
+      city: "Coimbatore"
     }
-  });
+  ];
 
-  const authority = await prisma.authority.upsert({
-    where: { userId: authorityUser.id },
-    update: { displayName: "Pilot City Municipal Office" },
-    create: {
-      userId: authorityUser.id,
-      displayName: "Pilot City Municipal Office"
-    }
-  });
-
-  await prisma.authorityAssignment.upsert({
-    where: {
-      authorityId_cityId: {
-        authorityId: authority.id,
-        cityId: city.id
+  for (const authoritySeed of authoritySeeds) {
+    const authorityUser = await prisma.user.upsert({
+      where: { email: authoritySeed.email },
+      update: {},
+      create: {
+        email: authoritySeed.email,
+        role: Role.AUTHORITY,
+        emailVerifiedAt: new Date(),
+        username: authoritySeed.username,
+        passwordHash: await argon2.hash("Authority@123")
       }
-    },
-    update: {
-      districtId: district.id
-    },
-    create: {
-      authorityId: authority.id,
-      districtId: district.id,
-      cityId: city.id
+    });
+
+    const authority = await prisma.authority.upsert({
+      where: { userId: authorityUser.id },
+      update: { displayName: authoritySeed.displayName },
+      create: {
+        userId: authorityUser.id,
+        displayName: authoritySeed.displayName
+      }
+    });
+
+    const assignment = createdCities.get(`${authoritySeed.district}:${authoritySeed.city}`);
+    if (!assignment) {
+      continue;
     }
-  });
+
+    await prisma.authorityAssignment.upsert({
+      where: {
+        authorityId_cityId: {
+          authorityId: authority.id,
+          cityId: assignment.cityId
+        }
+      },
+      update: {
+        districtId: assignment.districtId
+      },
+      create: {
+        authorityId: authority.id,
+        districtId: assignment.districtId,
+        cityId: assignment.cityId
+      }
+    });
+  }
 }
 
 main()

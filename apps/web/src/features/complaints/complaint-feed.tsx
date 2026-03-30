@@ -8,6 +8,20 @@ import { apiPost } from "../../lib/api";
 
 export function ComplaintFeed({ complaints }: { complaints: ComplaintCard[] }) {
   const [items, setItems] = useState(complaints);
+  const [search, setSearch] = useState("");
+
+  const filteredItems = items.filter((item) => {
+    const term = search.trim().toLowerCase();
+    if (!term) {
+      return true;
+    }
+
+    return (
+      item.complaintNumber.toLowerCase().includes(term) ||
+      item.issueType.toLowerCase().includes(term) ||
+      item.locationLabel.toLowerCase().includes(term)
+    );
+  });
 
   async function upvote(complaintId: string) {
     await apiPost("/votes", { complaintId });
@@ -23,8 +37,18 @@ export function ComplaintFeed({ complaints }: { complaints: ComplaintCard[] }) {
         title="Track civic issues across your area"
         description="Users can upvote existing complaints instead of creating duplicates."
       />
+      <div className="form-row" style={{ marginBottom: 18 }}>
+        <label htmlFor="complaint-search">Search complaint number, issue type, or location</label>
+        <input
+          id="complaint-search"
+          className="input"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Example: CIV-2026-000001"
+        />
+      </div>
       <div className="card-grid">
-        {items.map((complaint) => (
+        {filteredItems.map((complaint) => (
           <div key={complaint.id} className="panel issue-card">
             <span className="status-pill">{complaint.status.replaceAll("_", " ")}</span>
             <h3>{complaint.complaintNumber}</h3>
@@ -48,4 +72,3 @@ export function ComplaintFeed({ complaints }: { complaints: ComplaintCard[] }) {
     </Panel>
   );
 }
-

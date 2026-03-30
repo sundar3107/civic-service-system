@@ -220,11 +220,56 @@ h3 {
   color: #73511f;
 }
 
+.auth-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.auth-card {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 20px;
+  background: rgba(31, 92, 68, 0.05);
+  border: 1px solid rgba(31, 92, 68, 0.08);
+}
+
+.auth-card h3,
+.auth-card p {
+  margin: 0;
+}
+
+.map-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.map-box {
+  height: 320px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(24, 49, 36, 0.14);
+}
+
+.location-summary {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(31, 92, 68, 0.07);
+  color: var(--muted);
+}
+
+.helper-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
 @media (max-width: 900px) {
   .hero,
   .split,
-  .stats-row {
+  .stats-row,
+  .auth-grid {
     grid-template-columns: 1fr;
   }
 }
-

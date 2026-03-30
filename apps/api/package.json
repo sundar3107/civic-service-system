@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "nest build",
-    "start:dev": "nest start --watch",
+    "build": "nest build -p tsconfig.build.json",
+    "start:dev": "ts-node --project tsconfig.json src/main.ts",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "jest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "repair:routing": "ts-node prisma/repair-complaint-routing.ts"
   },
   "dependencies": {
     "@civic/types": "0.1.0",
@@ -50,4 +51,3 @@
     "typescript": "^5.7.3"
   }
 }
-

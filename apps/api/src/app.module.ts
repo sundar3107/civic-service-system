@@ -7,6 +7,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { AuthoritiesModule } from "./modules/authorities/authorities.module";
 import { ComplaintsModule } from "./modules/complaints/complaints.module";
 import { IssueCategoriesModule } from "./modules/issue-categories/issue-categories.module";
+import { LocationsModule } from "./modules/locations/locations.module";
 import { ReviewsModule } from "./modules/reviews/reviews.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VotesModule } from "./modules/votes/votes.module";
@@ -18,6 +19,7 @@ import { VotesModule } from "./modules/votes/votes.module";
     AuthModule,
     UsersModule,
     AuthoritiesModule,
+    LocationsModule,
     IssueCategoriesModule,
     ComplaintsModule,
     VotesModule,
@@ -27,4 +29,3 @@ import { VotesModule } from "./modules/votes/votes.module";
   providers: [AppService]
 })
 export class AppModule {}
-

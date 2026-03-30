@@ -52,6 +52,7 @@ export function AuthorityDashboardPage() {
       <div style={{ marginTop: 24 }}>
         <AuthorityDashboard complaints={complaints} />
       </div>
+      {complaints.length === 0 ? <div className="notice" style={{ marginTop: 18 }}>No complaints are assigned to this city yet.</div> : null}
     </>
   );
 }

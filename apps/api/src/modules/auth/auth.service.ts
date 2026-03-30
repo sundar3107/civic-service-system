@@ -107,15 +107,44 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email }
+      where: { email: dto.email },
+      include: {
+        authority: {
+          include: {
+            assignments: true
+          }
+        }
+      }
     });
 
-    if (!user?.passwordHash) {
+    if (!user) {
+      throw new UnauthorizedException("Account not found. Check the email or reseed the database.");
+    }
+
+    if (!user.passwordHash) {
+      if (user.role === Role.AUTHORITY) {
+        throw new UnauthorizedException("Authority account is not initialized. Rerun the seed command and try again.");
+      }
+
       throw new UnauthorizedException("Complete onboarding before logging in.");
     }
 
     if (!(await argon2.verify(user.passwordHash, dto.password))) {
       throw new UnauthorizedException("Invalid email or password.");
+    }
+
+    if (user.role === Role.AUTHORITY) {
+      if (!dto.districtId || !dto.cityId) {
+        throw new UnauthorizedException("District and city are required for authority login.");
+      }
+
+      const hasAssignment = user.authority?.assignments.some(
+        (assignment) => assignment.districtId === dto.districtId && assignment.cityId === dto.cityId
+      );
+
+      if (!hasAssignment) {
+        throw new UnauthorizedException("This authority account is not assigned to the selected district and city.");
+      }
     }
 
     const accessToken = await this.jwtService.signAsync({

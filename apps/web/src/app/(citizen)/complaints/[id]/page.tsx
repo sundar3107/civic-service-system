@@ -20,10 +20,7 @@ export default async function ComplaintDetailPage({ params }: { params: { id: st
     <AppShell
       title={complaint.complaintNumber}
       subtitle="Formal complaint card and municipal progress timeline."
-      links={[
-        { href: "/", label: "Citizen Home" },
-        { href: "/authority/dashboard", label: "Authority Dashboard" }
-      ]}
+      links={[{ href: "/home", label: "Citizen Home" }]}
     >
       <div className="split">
         <Panel>

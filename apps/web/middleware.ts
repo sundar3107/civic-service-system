@@ -5,11 +5,15 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const accessToken = request.cookies.get("accessToken");
 
-  if (pathname === "/" && !accessToken) {
+  const needsCitizenAuth =
+    pathname.startsWith("/home") || pathname.startsWith("/report") || pathname.startsWith("/complaints");
+  const needsAuthorityAuth = pathname.startsWith("/authority/dashboard");
+
+  if (needsCitizenAuth && !accessToken) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (pathname.startsWith("/authority/dashboard") && !accessToken) {
+  if (needsAuthorityAuth && !accessToken) {
     return NextResponse.redirect(new URL("/authority/login", request.url));
   }
 
@@ -17,5 +21,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/authority/dashboard"]
+  matcher: ["/", "/home/:path*", "/home", "/report/:path*", "/complaints/:path*", "/authority/dashboard/:path*", "/authority/dashboard"]
 };

@@ -37,7 +37,7 @@ export function OnboardingForm() {
       age: Number(form.age)
     });
     setMessage("Profile saved. Redirecting to citizen home.");
-    window.location.href = "/";
+    window.location.href = "/home";
   }
 
   return (
@@ -99,4 +99,3 @@ export function OnboardingForm() {
     </div>
   );
 }
-

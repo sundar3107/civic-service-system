@@ -7,7 +7,7 @@ export default function AuthorityLoginPage() {
     <AppShell
       title="Authority portal login"
       subtitle="Restricted municipal access for assigned district and city operations."
-      links={[{ href: "/", label: "Citizen Home" }]}
+      links={[{ href: "/login", label: "Citizen Login" }]}
     >
       <Panel>
         <SectionTitle
@@ -20,4 +20,3 @@ export default function AuthorityLoginPage() {
     </AppShell>
   );
 }
-
