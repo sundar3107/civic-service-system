@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { apiPost } from "../../lib/api";
 
-export function ReviewForm({ complaintId, status }: { complaintId: string; status: string }) {
+export function ReviewForm({
+  complaintId,
+  status,
+  alreadyReviewed
+}: {
+  complaintId: string;
+  status: string;
+  alreadyReviewed: boolean;
+}) {
   const [rating, setRating] = useState("5");
   const [body, setBody] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -12,13 +20,21 @@ export function ReviewForm({ complaintId, status }: { complaintId: string; statu
     return <div className="notice">Reviews are available after the complaint is marked completed.</div>;
   }
 
+  if (alreadyReviewed) {
+    return <div className="notice">You have already reviewed this completed complaint.</div>;
+  }
+
   async function submit() {
-    await apiPost("/reviews", {
-      complaintId,
-      rating: Number(rating),
-      body
-    });
-    setMessage("Review submitted.");
+    try {
+      await apiPost("/reviews", {
+        complaintId,
+        rating: Number(rating),
+        body
+      });
+      setMessage("Review submitted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Review submission failed.");
+    }
   }
 
   return (
@@ -46,4 +62,3 @@ export function ReviewForm({ complaintId, status }: { complaintId: string; statu
     </div>
   );
 }
-

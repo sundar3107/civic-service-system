@@ -27,6 +27,11 @@ export function AuthorityDashboard({ complaints }: { complaints: AuthorityCompla
     setItems((current) => current.map((item) => (item.id === complaintId ? { ...item, status } : item)));
   }
 
+  async function undoStatus(complaintId: string) {
+    const updated = await apiPatch<{ status: ComplaintStatus }>(`/complaints/${complaintId}/status/undo`, {});
+    setItems((current) => current.map((item) => (item.id === complaintId ? { ...item, status: updated.status } : item)));
+  }
+
   return (
     <Panel>
       <SectionTitle
@@ -53,6 +58,9 @@ export function AuthorityDashboard({ complaints }: { complaints: AuthorityCompla
               </button>
               <button type="button" className="btn btn-primary" onClick={() => updateStatus(complaint.id, ComplaintStatus.COMPLETED)}>
                 Mark Completed
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => undoStatus(complaint.id)}>
+                Undo Last Decision
               </button>
             </div>
           </div>

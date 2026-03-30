@@ -42,7 +42,7 @@ export class ComplaintsService {
     }));
   }
 
-  async getComplaint(complaintId: string) {
+  async getComplaint(complaintId: string, currentUserId?: string) {
     const complaint = await this.prisma.complaint.findUnique({
       where: { id: complaintId },
       include: {
@@ -63,6 +63,11 @@ export class ComplaintsService {
           include: {
             user: true
           }
+        },
+        votes: {
+          select: {
+            userId: true
+          }
         }
       }
     });
@@ -73,6 +78,7 @@ export class ComplaintsService {
 
     return {
       ...complaint,
+      currentUserId: currentUserId ?? null,
       severityLabel: severityFromVotes(complaint.voteCount)
     };
   }
@@ -260,6 +266,104 @@ export class ComplaintsService {
     });
 
     return updated;
+  }
+
+  async undoStatus(userId: string, complaintId: string) {
+    const authority = await this.prisma.authority.findUnique({
+      where: { userId },
+      include: { assignments: true }
+    });
+
+    if (!authority) {
+      throw new NotFoundException("Authority account not found.");
+    }
+
+    const complaint = await this.prisma.complaint.findUnique({
+      where: { id: complaintId },
+      include: {
+        statusHistory: {
+          orderBy: {
+            createdAt: "asc"
+          }
+        }
+      }
+    });
+
+    if (!complaint) {
+      throw new NotFoundException("Complaint not found.");
+    }
+
+    if (!authority.assignments.some((assignment) => assignment.cityId === complaint.cityId)) {
+      throw new BadRequestException("You are not assigned to this complaint location.");
+    }
+
+    if (complaint.statusHistory.length <= 1) {
+      throw new BadRequestException("No authority action is available to undo.");
+    }
+
+    const previousStatus = complaint.statusHistory[complaint.statusHistory.length - 2]?.status ?? ComplaintStatus.REMEDIAL_NOT_STARTED;
+
+    const latestHistory = complaint.statusHistory[complaint.statusHistory.length - 1];
+    await this.prisma.complaintStatusHistory.delete({
+      where: { id: latestHistory.id }
+    });
+
+    const updated = await this.prisma.complaint.update({
+      where: { id: complaintId },
+      data: {
+        status: previousStatus
+      },
+      include: {
+        statusHistory: {
+          orderBy: {
+            createdAt: "asc"
+          }
+        }
+      }
+    });
+
+    await this.auditService.log({
+      userId,
+      action: "COMPLAINT_STATUS_UNDONE",
+      entityType: "Complaint",
+      entityId: complaintId,
+      payload: { revertedTo: previousStatus }
+    });
+
+    return updated;
+  }
+
+  async deleteComplaint(userId: string, complaintId: string) {
+    const complaint = await this.prisma.complaint.findUnique({
+      where: { id: complaintId }
+    });
+
+    if (!complaint) {
+      throw new NotFoundException("Complaint not found.");
+    }
+
+    if (complaint.citizenId !== userId) {
+      throw new BadRequestException("You can delete only complaints created by you.");
+    }
+
+    if (complaint.status !== ComplaintStatus.REMEDIAL_NOT_STARTED) {
+      throw new BadRequestException("Complaint can be deleted only before authority acceptance.");
+    }
+
+    await this.prisma.complaint.delete({
+      where: { id: complaintId }
+    });
+
+    await this.auditService.log({
+      userId,
+      action: "COMPLAINT_DELETED",
+      entityType: "Complaint",
+      entityId: complaintId
+    });
+
+    return {
+      deleted: true
+    };
   }
 
   private async resolveCityFromLocation(formattedAddress: string | null) {

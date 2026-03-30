@@ -13,11 +13,19 @@ export class ReviewsService {
 
   async createReview(userId: string, dto: CreateReviewDto) {
     const complaint = await this.prisma.complaint.findUnique({
-      where: { id: dto.complaintId }
+      where: { id: dto.complaintId },
+      include: {
+        reviews: true
+      }
     });
 
     if (!complaint || complaint.status !== ComplaintStatus.COMPLETED) {
       throw new BadRequestException("Reviews are allowed only after complaint completion.");
+    }
+
+    const alreadyReviewed = complaint.reviews.some((review) => review.userId === userId);
+    if (alreadyReviewed) {
+      throw new BadRequestException("You have already reviewed this completed complaint.");
     }
 
     const review = await this.prisma.review.create({
@@ -40,4 +48,3 @@ export class ReviewsService {
     return review;
   }
 }
-

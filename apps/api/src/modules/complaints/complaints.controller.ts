@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Role } from "@civic/types";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -25,8 +25,9 @@ export class ComplaintsController {
   }
 
   @Get(":id")
-  getComplaint(@Param("id") complaintId: string) {
-    return this.complaintsService.getComplaint(complaintId);
+  @UseGuards(JwtAuthGuard)
+  getComplaint(@CurrentUser() user: { userId: string }, @Param("id") complaintId: string) {
+    return this.complaintsService.getComplaint(complaintId, user.userId);
   }
 
   @Post()
@@ -57,5 +58,18 @@ export class ComplaintsController {
     @Body() dto: UpdateComplaintStatusDto
   ) {
     return this.complaintsService.updateStatus(user.userId, complaintId, dto.status, dto.note);
+  }
+
+  @Patch(":id/status/undo")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.AUTHORITY, Role.ADMIN)
+  undoStatus(@CurrentUser() user: { userId: string }, @Param("id") complaintId: string) {
+    return this.complaintsService.undoStatus(user.userId, complaintId);
+  }
+
+  @Delete(":id")
+  @UseGuards(JwtAuthGuard)
+  deleteComplaint(@CurrentUser() user: { userId: string }, @Param("id") complaintId: string) {
+    return this.complaintsService.deleteComplaint(user.userId, complaintId);
   }
 }
